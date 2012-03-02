@@ -1,0 +1,16 @@
+$Id: change_summary.txt,v 1.1 2010/05/09 19:36:05 johnbarclay Exp $
+Summary of changes to garland theme
+
+block.tpl.php
+- added check for invisible block headings enabled by accessible_fix module
+- put h2s directly above menus (rather than after block div)
+
+
+node.tpl.php
+- added element-invisible class to h2 headers above terms and links divs
+- changed title 
+
+page.tpl.php
+- added h2s above primary and secondary tabs classed as element-invisible
+
+

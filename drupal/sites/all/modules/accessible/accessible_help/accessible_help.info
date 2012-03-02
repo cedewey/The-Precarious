@@ -1,0 +1,20 @@
+name = Accessibility Help Module
+
+description = Adds contextual accessibility help for content authors.
+
+core = 7.x
+dependencies[] = accessible_api
+package = Accessibility
+
+files[] = accessible_help.module
+files[] = accessible_help.install
+
+
+
+
+; Information added by drupal.org packaging script on 2011-06-14
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "accessible"
+datestamp = "1308052941"
+

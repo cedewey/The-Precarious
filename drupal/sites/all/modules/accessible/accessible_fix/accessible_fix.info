@@ -1,0 +1,24 @@
+name = Accessibility Fixes Module
+
+description = "Accomodate and fix accessiblilty deficiencies
+in core and contributed module.  Works on a case by case basis with hooks like
+hook_form_alter to modify other modules forms and markup.  As a rule, these
+are either stop gap measures until real fixes are made in modules or when
+accessibility implementation is unclear or preference based."
+
+core = 7.x
+dependencies[] = accessible_api
+package = Accessibility
+
+files[] = accessible_fix.admin.inc
+files[] = accessible_fix.install
+files[] = accessible_fix.module
+files[] = module_fixes/block.test
+files[] = module_fixes/filter.test
+
+; Information added by drupal.org packaging script on 2011-06-14
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "accessible"
+datestamp = "1308052941"
+

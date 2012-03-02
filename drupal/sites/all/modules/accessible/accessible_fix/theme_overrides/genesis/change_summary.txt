@@ -1,0 +1,5 @@
+$Id: change_summary.txt,v 1.1 2010/05/09 19:17:23 johnbarclay Exp $
+Summary of changes to genesis theme
+
+
+

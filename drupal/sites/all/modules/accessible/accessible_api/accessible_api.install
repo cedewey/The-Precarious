@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * accessible module installation and upgrade code.
+ */
+
+//////////////////////////////////////////////////////////////////////////////
+// Core API hooks
+
+/**
+ * Implementation of hook_install().
+ * adds "offscreen" column to blocks table
+ */
+function accessible_api_install() {
+  accessible_api_settings_save(accessible_api_data('defaults'));
+}
+
+/**
+ * Implementation of hook_uninstall().
+ * removes "offscreen" column from blocks table
+ */
+function accessible_api_uninstall() {
+  db_query("DELETE FROM {variable} WHERE name like 'accessible_api_%'");
+}

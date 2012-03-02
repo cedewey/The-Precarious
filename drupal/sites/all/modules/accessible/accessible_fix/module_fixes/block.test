@@ -1,0 +1,134 @@
+<?php
+
+/**
+ * @file
+ * simpletest for accessible_fix block fixes
+ *
+ */
+
+class AccessibleFixBlockTestCase extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Accessible Fix Block Tests',
+      'description' => 'Test Block fixes for accessible_fix module',
+      'group' => 'Accessible Fix Block'
+    );
+  }
+
+  public $module_name = 'accessible_fix';
+
+
+  public function setUp() {
+    parent::setUp(array('accessible_api', 'accessible_fix'));
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'search content',
+      ));
+    $this->drupalLogin($this->privileged_user);
+  }
+
+  function tearDown() {
+    parent::tearDown();
+  }
+
+  public function testFixedAriaRoles() {
+    $group = 'ldap_fix: block';
+
+    $tests['/'][] = array(
+      'message' => 'role=complementary on Drupal Powered by',
+      'pattern' => '@<div class="content" role="complementary">[^<]*<span>Powered by@mis',
+      'assertion' => 'Pattern',
+    );
+   $tests['/'][] = array(
+      'message' => 'role=search on search block',
+      'pattern' => '@id="block-search-form"[^>]*>[^<]*<div\W+class="content"\W+role="search">@mis',
+      'assertion' => 'Pattern',
+    );
+   /**
+    $tests['/'][] = array(
+      'message' => 'role=form on logon block',
+      'pattern' => '@User login</h2>[^<]*<div class="content" role="form">@mis',
+      'assertion' => 'Pattern',
+    );
+    **/
+    $tests['/'][] = array(
+      'message' => 'role=complementary on online block',
+      'pattern' => '@Who\'s online</h2>[^<]*<div class="content" role="complementary">@mis',
+      'assertion' => 'Pattern',
+    );
+    $tests['/'][] = array(
+      'message' => 'role=complementary on new block',
+      'pattern' => '@Who\'s new</h2>[^<]*<div class="content" role="complementary">@mis',
+      'assertion' => 'Pattern',
+    );
+
+    // setup blocks
+    module_enable(array('search'), TRUE);
+    $this->blockUpdate(array('module' => 'user', 'delta' => 'login'));   // logon block  role=form
+    $this->blockUpdate(array('module' => 'user', 'delta' => 'online'));   // whose online block  role=complementary
+    $this->blockUpdate(array('module' => 'user', 'delta' => 'new'));   // whose new block role=complementary
+    $this->blockUpdate(array('module' => 'search', 'delta' => 'form'));  // search block  role=search
+    block_flush_caches() ;
+
+    // make sure none of the tests fail without fixed_aria_role functionality enabled.
+    $this->assertNoFalsePositives($tests, $group);
+
+    // enable display of fixed arial roles
+    accessible_api_settings_save('fixed_aria_roles', 'functionality','fixed_aria_roles');
+    block_flush_caches() ;
+
+    $this->repetition($tests, $group);
+
+    module_disable(array('search'), TRUE);
+
+  }
+
+  public function assertNoFalsePositives($tests, $group) {
+    foreach ($tests as $path => $tests) {
+      $this->drupalGet(trim($path, '/'));
+      foreach ($tests as $test) {
+        switch (strtolower($test['assertion'])) {
+          case 'pattern':
+            if (preg_match($test['pattern'], $this->drupalGetContent())) {
+              $this->assertFalse(TRUE, 'False Positive found for: '. $test['message'] . '.  Test succeeded before conditions setup.', $group);
+            }
+          break;
+        }
+      }
+    }
+  }
+
+  public function repetition($tests, $group) {
+    foreach ($tests as $path => $tests) {
+      $this->drupalGet(trim($path, '/'));
+      foreach ($tests as $test) {
+        switch (strtolower($test['assertion'])) {
+
+          case 'pattern':
+            $this->assertPattern($test['pattern'], t($test['message']), $group);
+          break;
+        }
+      }
+    }
+  }
+
+  public function blockUpdate($block) {
+    $default_theme = variable_get('theme_default','');
+    $defaults = array('status' => 1, 'weight' => 1, 'region' => 'sidebar_first', 'theme' => $default_theme);
+
+    $block = array_merge($defaults, $block);
+    db_update('block')
+      ->fields(array(
+        'status' => $block['status'],
+        'weight' => $block['weight'],
+        'region' => $block['region'],
+      ))
+      ->condition('module', $block['module'])
+      ->condition('delta', $block['delta'])
+      ->condition('theme', $block['theme'])
+      ->execute();
+
+  }
+
+
+}

@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * The accessible module to make accessiblity tweaks not yet integrated
+ * into core or other modules.
+ *
+ */
+
+/**
+ * Implements hook_help()
+
+ */
+function accessible_help_help($path, $arg){
+  $help = "";
+  $path = current_path();
+  $contexts = accessible_api_data('contexts');
+  foreach ($contexts as $context => $data) {
+    if ($data['paths'] && drupal_match_path($path, join("\n", $data['paths']))) {
+      $help .=  '<div class="collapsible collapsed">'. accessible_api_helpset($context) .'</div>';
+    }
+  }
+
+return $help;
+
+}

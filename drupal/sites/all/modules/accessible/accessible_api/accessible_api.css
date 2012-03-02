@@ -1,0 +1,16 @@
+
+/* included by accessible drupal module
+
+fix for lack of specificity in .element-invisible rule:
+
+see also http://drupal.org/node/766444
+
+*/
+
+.element-invisible {
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}

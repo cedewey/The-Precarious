@@ -1,0 +1,101 @@
+diff --git a/taxonomy_breadcrumb.admin.inc b/taxonomy_breadcrumb.admin.inc
+index f7c995a..8115045 100644
+--- a/taxonomy_breadcrumb.admin.inc
++++ b/taxonomy_breadcrumb.admin.inc
+@@ -39,6 +39,17 @@ function taxonomy_breadcrumb_admin_settings($form, &$form_state) {
+     '#description' => t("If enabled and if viewing a node, the term's first synonym will be used in the breadcrumb, instead of the term name."),
+   );
+ */
++  $vocabularies = array('' => '');
++  foreach(taxonomy_get_vocabularies() as $v) {
++    $vocabularies[$v->vid] = $v->name;
++  }
++  $form['settings']['taxonomy_breadcrumb_selected_vid'] = array(
++    '#type' => 'select',
++    '#title' => 'Use this vocabulary to generate breadcrumbs',
++    '#description' => 'Override the default vocabulary selection heuristics, and always use this vocabulary for breadcrumb generation.',
++    '#options' => $vocabularies,
++    '#default_value' => variable_get('taxonomy_breadcrumb_selected_vid', false),
++  );
+ 
+   $form['settings']['taxonomy_breadcrumb_include_node_title'] = array(
+     '#type' => 'checkbox',
+diff --git a/taxonomy_breadcrumb.inc b/taxonomy_breadcrumb.inc
+index e2ace89..7c29879 100644
+--- a/taxonomy_breadcrumb.inc
++++ b/taxonomy_breadcrumb.inc
+@@ -40,14 +40,34 @@ function _taxonomy_breadcrumb_node_get_lightest_term($node) {
+   $terms = taxonomy_breadcrumb_node_get_terms($node);
+   if (!empty($terms)) {
+     if (count($terms) > 1) {
+-      foreach ($terms as $term) {
+-        // Only consider terms in the lightest vocabulary.
+-        if (!isset($vid)) {
+-          $vid = $term->vid;
++      // If a vocabulary has been selected in the admin form, use the first
++      // term from that vocabulary. Otherwise fall back to selecting a term from
++      // the lightest vocabulary;
++      //
++      // See:
++      // http://drupal.org/node/974664
++      // http://drupal.org/node/1220250
++      $selected_vid = variable_get('taxonomy_breadcrumb_selected_vid', false);
++
++      if(!$selected_vid) {
++        $vocs = taxonomy_get_vocabularies();
++        $selected_vid = reset($vocs)->vid;
++        foreach($vocs as $voc) {
++          if($voc->weight < $vocs[$selected_vid]->weight) {
++            $selected_vid = $voc->vid;
++          }
+         }
+-        elseif ($term->vid != $vid) {
++      }
++
++      if(!$selected_vid) {
++        return false;
++      }
++
++      foreach ($terms as $term) {
++        if ($term->vid != $selected_vid) {
+           continue;
+         }
++
+         // If the term has parents, the weight of the term is the weight of the lightest parent.
+         $parents = taxonomy_get_parents_all($term->tid);
+         $depth = count($parents);
+@@ -75,7 +95,8 @@ function _taxonomy_breadcrumb_node_get_lightest_term($node) {
+           }
+         }
+       }
+-      return $lterm;
++
++      return (isset($lterm) ? $lterm : false);
+     }
+     else {
+       return array_pop($terms);
+diff --git a/taxonomy_breadcrumb.module b/taxonomy_breadcrumb.module
+index 40d83e4..ac10a79 100644
+--- a/taxonomy_breadcrumb.module
++++ b/taxonomy_breadcrumb.module
+@@ -64,14 +64,15 @@ function taxonomy_breadcrumb_node_view($node, $view_mode = 'full') {
+     // if the node type IS NOT IN the node types list and the list IS NOT inclusive (e.g. exclusive)
+     // THEN modify the breadcrumb trail.
+     if ($in_list == variable_get('taxonomy_breadcrumb_include_nodes', 0) ) {
+-
+       // Extract lightest term from lightest vocabulary assosciated with node.
+       $term = _taxonomy_breadcrumb_node_get_lightest_term($node);
+-      $breadcrumb = _taxonomy_breadcrumb_generate_breadcrumb($term->tid);
+-      if (variable_get('taxonomy_breadcrumb_include_node_title', FALSE)) {
+-        $breadcrumb[] = check_plain($node->title);
++      if($term) {
++        $breadcrumb = _taxonomy_breadcrumb_generate_breadcrumb($term->tid);
++        if (variable_get('taxonomy_breadcrumb_include_node_title', FALSE)) {
++          $breadcrumb[] = check_plain($node->title);
++        }
++        drupal_set_breadcrumb($breadcrumb);
+       }
+-      drupal_set_breadcrumb($breadcrumb);
+     }
+   }
+ }

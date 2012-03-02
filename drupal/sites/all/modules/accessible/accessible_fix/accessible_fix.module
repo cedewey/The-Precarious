@@ -1,0 +1,399 @@
+<?php
+
+/**
+ * @file
+ * The accessible_fix module to make accessiblity tweaks
+ * not yet integrated
+ * into core or other modules.
+ *
+ */
+/** this belongs in filter.inc but is here for testing **/
+
+
+/**
+ * note the following loop is not within a function; it is processed every time the file is loaded
+ * to essentially "load" modulettes of sorts
+ */
+
+foreach(accessible_fix_viable_modules() as $module_name) {
+  require_once(drupal_get_path('module','accessible_fix') .'/module_fixes/' . $module_name . '.inc');
+}
+
+
+/**
+ * implementation of hook_accessible_api_data_alter()
+ * to get accessible fix options in main accessibility interface
+ */
+
+function accessible_fix_accessible_api_data_alter(&$accessibility_data, &$discard) {
+
+  $accessibility_data['defaults']['functionality'] =
+      array (
+        'invisible_headings' => 'invisible_headings',
+        'fixed_aria_roles' => 'fixed_aria_roles',
+        'aria_abstract_roles' => 'aria_abstract_roles',
+        'aria_widget_roles' => 'aria_widget_roles',
+        'aria_document_structure' => 'aria_document_structure',
+        'aria_landmark_roles' => 'aria_landmark_roles',
+        'skip_nav' => 'skip_nav',
+      );
+
+  $accessibility_data['functionality']['invisible_headings'] = array(
+      'title' => 'Invisible Headings',
+      'description' => 'Allow authors to designate headings as invisible',
+      'implementation_contexts' => array('block' => 'header', 'node' => 'header'),
+    );
+
+
+  $accessibility_data['functionality']['fixed_aria_roles'] = array(
+     'title' => 'Add Known Aria Roles',
+     'description' => 'Automatically add ARIA roles to content that has clear ARIA role.  For example, add "navigation" role to menu blocks.',
+     'implementation_contexts' => array(),
+   );
+
+
+   $accessibility_data['functionality']['aria_abstract_roles'] = array(
+     'title' => 'Aria Abstract Roles',
+     'description' => 'Allow authors to add ARIA abstract roles such as composite, roletype, and window.',
+     'reference' => "http://www.w3.org/TR/wai-aria/roles#abstract_roles",
+     'implementation_contexts' => array(),
+     'types' => array(
+       'composite',
+       'input',
+       'landmark',
+       'range',
+       'roletype',
+       'section',
+       'sectionhead',
+       'select',
+       'structure',
+       'widget',
+       'window',
+     )
+   );
+
+   $accessibility_data['functionality']['aria_widget_roles'] = array(
+     'title' => 'Aria Widget Roles',
+     'description' => 'Allow authors to add ARIA widget roles such as slider, scrollbar, progressbar, etc.',
+     'reference' => "http://www.w3.org/TR/wai-aria/roles#widget_roles",
+     'implementation_contexts' => array('block' => 'content'),
+     'types' => array(
+       'alert',
+       'alertdialog',
+       'button',
+       'checkbox',
+       'combobox',
+       'dialog',
+       'gridcell',
+       'link',
+       'log',
+       'marquee',
+       'menuitem',
+       'menuitemcheckbox',
+       'menuitemradio',
+       'option',
+       'progressbar',
+       'radio',
+       'radiogroup',
+       'scrollbar',
+       'slider',
+       'spinbutton',
+       'status',
+       'tab',
+       'tabpanel',
+       'textbox',
+       'timer',
+       'tooltip',
+       'treeitem',
+       'grid',
+       'listbox',
+       'menu',
+       'menubar',
+       'tablist',
+       'toolbar',
+       'tree',
+       'treegrid',
+       ),
+   );
+
+   $accessibility_data['functionality']['aria_document_structure'] = array(
+     'title' => 'Aria Document Structure',
+     'description' => 'Allow authors to add ARIA Document Structure roles such as article, list, presentation, etc.',
+     'reference' => 'http://www.w3.org/TR/wai-aria/roles#document_structure_roles',
+     'implementation_contexts' => array('block' => 'header', 'node' => 'header'),
+     'types' =>  array(
+       'article',
+       'columnheader',
+       'definition',
+       'directory',
+       'document',
+       'group',
+       'heading',
+       'img',
+       'list',
+       'listitem',
+       'math',
+       'note',
+       'presentation',
+       'region',
+       'row',
+       'rowheader',
+       'separator',
+     ),
+   );
+
+   $accessibility_data['functionality']['aria_landmark_roles'] = array(
+     'title' => 'Aria Landmark Roles',
+     'description' => 'Allow authors to add ARIA landmark roles such as banner, form, search, navigation',
+     'reference' => 'http://www.w3.org/TR/wai-aria/roles#landmark_roles',
+     'implementation_contexts' => array('block' => 'header', 'node' => 'content'),
+     'types' => array(
+       'application',
+       'banner',
+       'complementary',
+       'contentinfo',
+       'form',
+       'main',
+       'navigation',
+       'search',
+     )
+   );
+
+   $accessibility_data['functionality']['skip_nav'] = array(
+     'title' => 'Skip Navigation',
+     'description' => 'Add skip navigation links around menus',
+     'reference' => 'http://www.webaim.org/techniques/skipnav/',
+   );
+
+
+
+  require_once('accessible_fix.admin.inc');
+  $options = accessible_fix_available_tpls();
+  $accessibility_data['defaults']['overridden_tpls'] = array ();
+
+  $form = array();
+  $form['overridden_tpls_set'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Templates to Override'),
+      '#description' => t('The following templates (.tpl files) will benefit
+       from being overridden by the accessible_fix alternatives because of added
+       accessibility markup.  This is a reasonable alternative to modifying the templates
+       yourself, provided you have not made any changes in the theme files in the theme.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['overridden_tpls_set']['overridden_tpls'] = array(
+    '#type' => 'checkboxes',
+    '#title' => 'Templates to Override',
+    '#size' => 10,
+    '#options' => $options,
+   );
+
+
+  $accessibility_data['overridden_tpls']['form'] = $form;
+
+
+  foreach(accessible_fix_viable_modules() as $module_name) {
+    $function_name = "accessible_fix_accessibility_api_data_alter_${module_name}";
+    $path = drupal_get_path('module','accessible_fix') .'/module_fixes/' . $module_name . '.admin.inc';
+    if (file_exists($path)) {
+      require_once($path);
+      if (function_exists($function_name)) {
+        $accessibility_data = call_user_func($function_name, $accessibility_data);
+      }
+    }
+  }
+
+
+
+}
+
+
+/** include any module fixes files for enabled modules**/
+function accessible_fix_viable_modules() {
+  //@todo "modules" array should be cached and cache reset on modules enabled and disabled
+  static $modules;
+  if (!$modules) {
+    $modules = array();
+    $modules_fix_dir = drupal_get_path('module','accessible_fix') .'/module_fixes';
+    foreach (scandir($modules_fix_dir) as $module_fix) {
+      $parts = explode(".", $module_fix, 2);
+      if (count($parts) == 2) {
+        $module_name = $parts[0];
+        if ($parts[1] == 'inc' && (module_exists($module_name) || $module_name == 'MODULE')) {  // only consider MODULE.inc files
+        $modules[] = $module_name;
+        }
+      }
+    }
+  }
+  return $modules;
+}
+
+/**
+ * eliminate functionality options that don't belong in a context.
+ * the data structure will need to be changed in accessible_api.data.inc
+ *   to accomodate finer grained contexts.
+ */
+
+function accessible_fix_viable_functionalities($conf, &$functionality_conf, $element_type) {
+  foreach ($conf as $functionality => $discard) {
+    if (! isset($functionality_conf[$functionality]['implementation_contexts'][$element_type])) {
+      unset($conf[$functionality]);
+    }
+  }
+  return $conf;
+}
+
+/**
+ * implements hook_accessible_fix_add_fields()
+ */
+
+function accessible_fix_viable_aria_options($functionality_allowed) {
+  $options = array();
+  $functionality_data =  accessible_api_data('functionality');
+  foreach($functionality_allowed as $functionality) {
+    if (isset($functionality_data[$functionality]['types']) && is_array($functionality_data[$functionality]['types'])) {
+      $options =  array_merge($options, $functionality_data[$functionality]['types']);
+    }
+   }
+
+  if (count($options)) {
+    $options = array_combine($options, $options);
+    ksort($options, SORT_STRING);
+  }
+
+  return $options;
+
+}
+
+/**
+ *  implements hook_accessible_fix_add_fields()
+ *  to add accessibility configuration fields to various content forms
+ *  such as block and node.
+ */
+
+function accessible_fix_accessible_fix_add_fields($element_type, $storage_id) {
+  $form_part = array();
+  $aria_roles = array('node','block');
+  $invisible_headings = array('node','block');
+  $conf = accessible_api_settings('functionality');
+  $functionality_conf =  accessible_api_data('functionality');
+  $filtered_conf = accessible_fix_viable_functionalities($conf, $functionality_conf, $element_type);
+  $storage_key = accessible_fix_storage_key($element_type, $storage_id);
+  $defaults = ($storage_id) ? variable_get($storage_key, array()) : array();
+
+  if (isset($filtered_conf['invisible_headings']) && $filtered_conf['invisible_headings']) {
+     $form_part['heading_invisible'] = array(
+      '#type' => 'checkbox',
+      '#title' => 'Hide Heading.  (class heading as "element-invisible")',
+      '#default_value' => isset($defaults['heading_invisible']) ? $defaults['heading_invisible'] : NULL,
+      '#description' => t('The role of this class is to hide elements visually,
+        but keep them available for screen-readers. This class should be used for information
+        required for screen-reader users to understand and use the site where visual display
+        is undesirable. Information provided in this manner should be kept concise, to avoid
+        unnecessary burden on the user.  See http://drupal.org/node/254940#element-hidden)'),
+    );
+
+  }
+
+  $options = accessible_fix_viable_aria_options($filtered_conf);
+  if (count($options)) {
+    $form_part['aria_roles'] = array(
+      '#type' => 'select',
+      '#multiple' => true,
+      '#size' => 5,
+      '#title' => t('ARIA roles.'),
+      '#options' => $options,
+      '#default_value' =>  (isset($defaults['aria_roles'])) ? $defaults['aria_roles'] : NULL,
+      '#description' => t('ARIA roles help with semantic markup and accessibility.'),
+    );
+
+  }
+
+  /** if (!count($form_part)) {
+     $form_part['accessible_options'] = array(
+      '#type' => '#markup',
+      '#title' =>  t('No accessible features enabled for this element'),
+      '#markup' => t('how to enable accessibility stuff.'),
+    );
+    }
+   **/
+
+  return $form_part;
+}
+
+function accessible_fix_storage_key($element_type, $storage_id) {
+  return "accessible_api__". $element_type ."__". $storage_id;
+}
+
+function accessible_fix_store_data($form_values, $element_type, $storage_id) {
+
+  $storage_key = accessible_fix_storage_key($element_type, $storage_id);
+  $data = variable_get($storage_key, array());  //start with old data, and merge with form data.
+
+  // only store form data from fields that were added via hook_accessible_fix_add_fields
+  $new_fields = array_keys(module_invoke_all('accessible_fix_add_fields', $element_type, $storage_id));
+
+   foreach($new_fields as $field_name) {
+    $data[$field_name] = $form_values[$field_name];
+    }
+
+  variable_set($storage_key, $data);
+}
+
+function accessible_fix_get_data($element_type, $storage_id) {
+  $storage_key = accessible_fix_storage_key($element_type, $storage_id);
+  $data = variable_get($storage_key, NULL);  //start with old data, and merge with form data.
+  return $data;
+}
+
+
+
+/**
+ * Implementation of hook_theme_registry_alter()
+ *
+ * for .tpls in themes directories, this is not needed, but for .tpl files
+ * in modules, seems necessary.
+ */
+function accessible_fix_theme_registry_alter(&$theme_registry) {
+  $overridden_tpls = accessible_api_settings('overridden_tpls');
+  if (!is_array($overridden_tpls)) {
+    return;
+  }
+  global $theme_key;
+  foreach($overridden_tpls as $overrideable_template) {
+    list($theme_name, $template_type) = explode("_", $overrideable_template, 2);
+    if ($theme_key == $theme_name) { // is this an issue with modules like theme switcher or context
+      $path = drupal_get_path('module', 'accessible_fix');
+      $theme_registry[$template_type]['theme path'] = $path;
+      $theme_registry[$template_type]['path'] = $path .'/theme_overrides/'. $theme_name;
+      $theme_registry[$template_type]['template'] = 'accessible-fix-' . $template_type;
+    }
+  }
+}
+
+
+/**
+ * implementation of hook_form_FORM_ID_alter()
+ */
+
+function accessible_fix_form_accessible_api_admin_edit_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'accessible_fix_form_accessible_api_admin_edit_submit';
+}
+
+
+/**
+ * invoke pseudo hook behavior to give module fixes access to submitted accessible settings data
+ */
+function accessible_fix_form_accessible_api_admin_edit_submit($form, &$form_state) {
+  $old_settings = $form_state['storage']['old_accessible_api_settings'];
+  foreach (accessible_fix_viable_modules() as $module_name) {
+    $function_name = $module_name .'_accessible_api_settings_submitted';
+    require_once('module_fixes/'. $module_name . '.admin.inc');
+    //dpm($function_name);
+    if (function_exists($function_name)) {
+      call_user_func($function_name, $old_settings, accessible_api_settings());
+    }
+  }
+}

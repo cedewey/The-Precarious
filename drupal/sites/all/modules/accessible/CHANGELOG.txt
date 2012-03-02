@@ -1,0 +1,35 @@
+; $Id: CHANGELOG.txt,v 1.4 2010/07/16 17:06:05 yaxbalamahaw Exp $
+
+7.x-2.x Status:
+
+Module    Feature                                    Done  Tests   Notes
+------    -------                                    ----  -----   -----
+API       Exportables                                Y     N/A
+Fix       Fixed ARIA Block Roles                     Y     Y
+Fix       H2-H6 in html filter                       Y     Y
+Fix       Offscreen Custom Block Headings            ?     N      Simpletests and caching are problematic still
+Fix       Offscreen Node Headings                    N
+Fix       Aria Custom Block Roles                    Y     N
+Fix       Aria Custom Node Content Roles             Y     N
+Fix       Automated Skip Nav Links                   ?     N       Works, but need to look at desired html
+Fix       Template Overrides                         Y     N       Needs theme cache flushing when settings change.
+API       Accessible Var in themes                   Y     N       Hmmm.  Does anyone care about this?
+Help      Contextual Help                            ?     N
+Fix       Acheck                                     ?     N       YaxBalamAhaw added this. Probably working, need to test.
+
+
+
+by YaxBalamAhaw: Added TinyMCE Achecker plugin option to WYSIWYG module.
+#826992 by YaxBalamAhaw: Added tpls for Seven, Bartik, and Corolla. And modified
+  Garland's page.tpl.
+#830506 by YaxBalamAhaw: changed _set_default_variables() function name.
+by YaxBalamAhaw: Fixed accessible_api_uninstall and accessible_fix_... queries.
+#830506 by YaxBalamAhaw: Set default block roles in accessible_fix.install.
+#826992 by YaxBalamAhaw: Updated garland page.tpl with a couple more landmarks.
+by YaxBalamAhaw: Created CHANGELOG.txt.
+#826992 by YaxBalamAhaw: Updated accessible_fix_theme_registry_alter and tpls.
+#826306 by YaxBalamAhaw: Removed Search module fixes.
+#824842 by YaxBalamAhaw: Fixed accessible_api_helpset function.
+JohnBarclay. added quail.module and accessible_test.module.  These are playground modules and should not be used.
+JohnBarclay. fixed accessible_help to work with drupal 7.
+#1091634 by JohnBarclay:  accessible_fix.  added option to add h2-h6 to filtered html formats

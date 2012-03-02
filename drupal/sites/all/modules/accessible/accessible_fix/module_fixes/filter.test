@@ -1,0 +1,71 @@
+<?php
+
+/**
+ * @file
+ * simpletest for accessible_fix block fixes
+ *
+ */
+
+class AccessibleFixFilterTestCase extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Accessible Fix Filter Tests',
+      'description' => 'Test Filter module fixes for accessible_fix module',
+      'group' => 'Accessible Fix Filter'
+    );
+  }
+
+  public $module_name = 'accessible_fix';
+
+
+  public function setUp() {
+    parent::setUp(array('accessible_api', 'accessible_fix'));
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'create page content',
+      'access content',
+      ));
+    $this->drupalLogin($this->privileged_user);
+  }
+
+  function tearDown() {
+    parent::tearDown();
+  }
+
+  public function testh2toh6inFilteredHtml() {
+    $group = 'accessible_fix: filter';
+
+    $with_headings_html = '<h2>hello h2</h2><h3>hello h3</h3><h4>hello h4</h4><h5>hello h5</h5><h6>hello h6</h6><p>Paragraph</p>';
+
+    $settings = array(
+      'type' => 'page',
+      'title' => 'Accessible Fix Filter Test',
+      'body' => array(LANGUAGE_NONE => array(array('value' => $with_headings_html))),
+    );
+
+    $user = $this->drupalCreateUser(array('search content', 'create page content', 'access content'));
+    $this->drupalLogin($user);
+
+    $node = $this->drupalCreateNode($settings);
+
+    // test
+   // accessible_api_settings_save('filter_html_additions', 'functionality', 'filter_html_additions');
+  //  debug(filter_formats()); debug(accessible_api_settings()); drupal_flush_all_caches();
+   // debug(filter_list_format('filtered_html'));
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertText($with_headings_html, t('h2 to h6 allowed in html_filter'), $group);
+
+
+    // test for false positive
+    accessible_api_settings_save(FALSE, 'functionality', 'filter_html_additions');
+    drupal_flush_all_caches();
+  //  debug('additions disabled'); debug(filter_formats()); debug(accessible_api_settings());
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoText($with_headings_html, t('h2 to h6 not allowed in html_filter without accessible fix (test for false positive).'), $group);
+
+
+  }
+
+
+
+}

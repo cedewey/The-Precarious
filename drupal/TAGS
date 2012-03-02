@@ -1,0 +1,33 @@
+
+authorize.php,182
+define('DRUPAL_ROOT'DRUPAL_ROOT26,1081
+define('MAINTENANCE_MODE'MAINTENANCE_MODE35,1433
+function authorize_access_denied_page(40,1535
+function authorize_access_allowed(56,2101
+
+cron.php,40
+define('DRUPAL_ROOT'DRUPAL_ROOT11,155
+
+index.php,40
+define('DRUPAL_ROOT'DRUPAL_ROOT17,369
+
+install.php,90
+define('DRUPAL_ROOT'DRUPAL_ROOT11,128
+define('MAINTENANCE_MODE'MAINTENANCE_MODE16,232
+
+update.php,505
+define('DRUPAL_ROOT'DRUPAL_ROOT6,57
+define('MAINTENANCE_MODE'MAINTENANCE_MODE28,843
+function update_selection_page(30,882
+function update_script_selection_form(40,1117
+function update_helpful_links(144,4891
+function update_results_page(152,5176
+function update_info_page(232,8205
+function update_access_denied_page(257,9990
+function update_access_allowed(276,11637
+function update_task_list(297,12273
+function update_extra_requirements(314,12782
+function update_check_requirements(330,13268
+
+xmlrpc.php,40
+define('DRUPAL_ROOT'DRUPAL_ROOT11,140

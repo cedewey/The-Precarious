@@ -1,0 +1,220 @@
+<?php
+
+define('ACCESSIBLE_MENU_BASE_PATH', 'admin/config/content/accessible');
+
+/**
+ * Implementation of hook_menu()
+ */
+function accessible_api_menu() {
+  $items = array();
+
+  $items[ACCESSIBLE_MENU_BASE_PATH] = array(
+    'title' => t('Accessibility Configuration'),
+    'description' => t('ARIA, offscreen titles, theming template corrections, etc.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('accessible_api_admin_edit', "edit"),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'accessible_api.admin.inc',
+    'weight_value' => -8,
+  );
+
+  $items[ACCESSIBLE_MENU_BASE_PATH  .'/configure'] = array(
+    'title' => t('Configuration'),
+    'weight' => 10,
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items[ACCESSIBLE_MENU_BASE_PATH  .'/about'] = array(
+    'title' => 'About',
+    'description' => "Summary of module functionality and related resources.",
+    'page callback' => 'accessible_api_about',
+    'access arguments' => array('administer site configuration'),
+    'weight' => 50,
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+function accessible_api_about() {
+  return file_get_contents(drupal_get_path('module', 'accessible_api') . '/about.html');
+}
+
+
+/**
+ * Implementation of hook_init()
+ */
+function accessible_api_init() {
+  drupal_add_css(drupal_get_path('module','accessible_api') .'/accessible_api.css', 'module', 'all', FALSE);
+}
+
+
+/**
+ * implementation of hook_preprocess()
+ * to get accessibility preferences in theme variables
+ */
+function accessible_api_preprocess(&$variables) {
+  $settings = accessible_api_settings();
+  if (@$settings['prefs_in_theme']) {
+    $variables['accessibility'] = (object)$settings['guideline_types'];
+  } else {
+    $variables['accessibility'] =  NULL;
+  }
+}
+
+
+
+/**
+ *  a function to generate a themed list and title for accessible help
+ *  its designed for use by the hook_help function in accessible module
+ *  but may be of use elsewhere
+ *
+ *  @param string $helpsetid
+ *    the context id the help should be relevant to.  e.g. webforms, audio_and_video, content, blocks_and_menus
+ *
+ *  @param string $title
+ *    the title used above the list of help items.
+ *
+ *  @param array $guideline_types
+ *    array of guideline types to be shown.  eg array('wcag')
+ *
+ *  @param array $alacart_tip_ids
+ *    when specific tips rather than specific lists of tips (contexts) are desired, use an array of ids
+ *    such as array('fieldset_and_legend','transcript')
+ *
+ *  @return html themed list of tips
+ *
+ **/
+
+function accessible_api_helpset($context_id, $title = NULL, $enabled_guidelines = NULL, $alacart_tip_ids = NULL) {
+  $items = array();
+  $accessibility = accessible_api_data();
+  if (! $enabled_guidelines) {
+    $enabled_guidelines = accessible_api_settings('guideline_types');
+    }
+
+  $tip_set = (is_array($alacart_tip_ids)) ? $alacart_tip_ids : $accessibility['contexts'][$context_id]['tips'];
+  foreach ($tip_set as $tip_id) {
+    $tip = $accessibility['tips'][$tip_id];
+   // if (in_array($tip['type'], $enabled_guidelines)) {  // need more data in tips array to filter on sites selected guideline types
+        $items[] = $tip['text'];
+  //  }
+  }
+  $title = ($title) ? $title : $accessibility['contexts'][$context_id]['title'];
+
+  $vars = array(
+    'items' => $items,
+    'title' => $title,
+    'type' => 'ul',
+    'attributes' => array('class'=>'accessible-tips'),
+    );
+  return theme('item_list', $vars);
+
+}
+
+
+
+/**
+ * data is non configurable data such as guideline text
+ */
+function accessible_api_data($type = NULL, $subtype = NULL) {
+
+  static $accessible_api_data;
+  if (!is_array($accessible_api_data)) {
+    if ($cache = cache_get('accessible_api_data')) {
+      $accessible_api_data = $cache['data'];
+    }
+    else {
+      require_once('accessible_api.data.inc');  // this populates the $accessibility array
+      $accessible_api_data = accessibility_data_array();
+      drupal_alter('accessible_api_data', $accessible_api_data);
+    }
+  }
+  if ($type && $subtype) {
+    return $accessible_api_data[$type][$subtype];
+  }
+  elseif ($type)  {
+    return $accessible_api_data[$type];
+  }
+  else {
+    return $accessible_api_data;
+  }
+}
+
+/**
+ * implementation of hook_modules_enabled()
+ *
+ * to clear out data cache when new data may become available
+ */
+
+function accessible_api_modules_enabled($modules) {
+  cache_clear_all('accessible_api_data', 'cache');
+  $discard = accessible_api_data();
+}
+
+
+/**
+ * settings are admin configured settings
+ */
+function accessible_api_settings($type = NULL, $subtype = NULL, $reset = FALSE) {
+
+  static $settings;
+
+  if (!is_array($settings) || $reset) {
+    $settings = variable_get('accessible_api_settings', array());
+  }
+
+  if ($type && $subtype) {
+    return isset($settings[$type][$subtype]) ? $settings[$type][$subtype] : NULL;
+  }
+  elseif ($type)  {
+    return isset($settings[$type]) ? $settings[$type] : array();
+  }
+  else {
+    return isset($settings) ? $settings : array();
+  }
+}
+
+/**
+ * settings are admin configured settings
+ */
+function accessible_api_settings_save($data, $type = NULL, $subtype = NULL) {
+
+  $settings = variable_get('accessible_api_settings', array());
+
+  if ($type && $subtype) {
+    $old_data = isset($settings[$type][$subtype]) ? $settings[$type][$subtype] : array();
+    if (is_array($old_data) && is_array($data)) {
+      $settings[$type][$subtype] = array_merge($old_data, $data);
+    }
+    else {
+       $settings[$type][$subtype] = $data;
+    }
+  }
+  elseif ($type)  {
+    $old_data = isset($settings[$type]) ? $settings[$type] : array();
+    $settings[$type] = array_merge($old_data, $data);
+  }
+  else {
+    $old_data = isset($settings) ? $settings : array();
+    $settings = array_merge($old_data, $data);
+  }
+  variable_set('accessible_api_settings', $settings);
+  $discard = accessible_api_settings(NULL, NULL, TRUE); // clear static variable
+}
+
+
+/**
+ * easier to put the default values in this way, than when building the form
+ */
+function accessible_api_form_accessible_api_admin_edit_alter(&$form, &$form_state) {
+  foreach ($form as $element_id => $form_element) {
+    if (isset($form_element['#type']) && $form_element['#type'] == 'fieldset') {
+      foreach ($form_element as $element_sub_id => $sub_element) {
+        if (strpos($element_sub_id,'#') !== 0 && isset($sub_element['#type']) && $sub_element['#type'] != 'fieldset') {
+          $form[$element_id][$element_sub_id]['#default_value'] = accessible_api_settings($element_sub_id);
+        }
+      }
+    }
+  }
+}

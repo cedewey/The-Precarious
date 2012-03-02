@@ -1,0 +1,22 @@
+name = Accessibility API
+package = Accessibility
+description = "General toolset including guidelines data, site accessibility preferences,
+and functions other modules may build on."
+core = 7.x
+
+files[] = accessible_api.admin.inc
+files[] = accessible_api.css
+files[] = accessible_api.data.inc
+files[] = accessible_api.install
+files[] = accessible_api.module
+
+configure = admin/config/content/accessible
+
+features[variable][] = "accessible_api_settings"
+
+; Information added by drupal.org packaging script on 2011-06-14
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "accessible"
+datestamp = "1308052941"
+
