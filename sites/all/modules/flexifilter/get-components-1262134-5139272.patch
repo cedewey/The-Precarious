@@ -1,0 +1,31 @@
+diff --git a/flexifilter.module b/flexifilter.module
+index 0c10517..8e9f065 100644
+--- a/flexifilter.module
++++ b/flexifilter.module
+@@ -396,7 +396,7 @@ function flexifilter_filter_info() {
+ }
+ 
+ function flexifilter_filter_prepare($text, $filter, $format, $langcode, $cache, $cache_id) {
+-  $filters = flexifilter_get_filters(FALSE);
++  $filters = flexifilter_get_filters(TRUE);
+   foreach($filters as $row) {
+     if($row['enabled'] && $row['label'] == $filter->title) {
+       $flexifilter = $row;
+@@ -406,7 +406,7 @@ function flexifilter_filter_prepare($text, $filter, $format, $langcode, $cache,
+ }
+ 
+ function flexifilter_filter_process($text, $filter, $format, $langcode, $cache, $cache_id) {
+-  $filters = flexifilter_get_filters(FALSE);
++  $filters = flexifilter_get_filters(TRUE);
+   foreach($filters as $row) {
+     if($row['enabled'] && $row['label'] == $filter->title) {
+       $flexifilter = $row;
+@@ -416,7 +416,7 @@ function flexifilter_filter_process($text, $filter, $format, $langcode, $cache,
+ }
+ 
+ function flexifilter_filter_tips($filter, $format, $long = FALSE) {
+-  $filters = flexifilter_get_filters(FALSE);
++  $filters = flexifilter_get_filters(TRUE);
+   foreach($filters as $row) {
+     if($row['enabled'] && $row['label'] == $filter->title) {
+       $flexifilter = $row;

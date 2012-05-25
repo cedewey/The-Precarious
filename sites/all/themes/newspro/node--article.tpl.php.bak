@@ -1,0 +1,60 @@
+<?php if ($page == 0) { ?>
+<div class="info-block">
+<?php if (isset($node->field_image[$node->language][0])) { ?><div class="image-block"><a href="<?php print $node_url ?>" title="<?php print $node->field_image[$node->language][0]['title'] ?>"><?php print theme('image_style', array('style_name' => 'teaser', 'path' => $node->field_image[$node->language][0]['uri'], 'alt' => $node->field_image[$node->language][0]['alt'], 'title' => $node->field_image[$node->language][0]['title'], 'attributes' => array(),'getsize' => false) );?></a></div><?php } ?>
+<div class="text-block">
+<h2 class="info-title"><a href="<?php print $node_url ?>"><?php print $title ?></a></h2>
+<ul class="description-list">
+<li class="date"><?php print $date; ?></li>
+<?php if ($node->comment and !($node->comment == 1 and !$node->comment_count)) { ?><li class="comments"><a href="<?php print url("node/$node->nid", array('fragment' => 'comment-form')) ?>"><?php print format_plural($node->comment_count, '1 Comment', '@count Comments') ?></a></li><?php } ?>
+</ul>
+<?php hide($content['links']); print render($content) ?>
+</div>
+</div>
+<?php } else { ?>
+<div class="text-content">
+<?php if (isset($node->field_image[$node->language][0])) { ?><div class="image-box"><a href="<?php print file_create_url($node->field_image[$node->language][0]['uri']); ?>" title="<?php print $node->field_image[$node->language][0]['title'] ?>" class="gim" rel="prettyPhoto[pp_gal]"><?php print theme('image_style', array('style_name' => 'body', 'path' => $node->field_image[$node->language][0]['uri'], 'alt' => $node->field_image[$node->language][0]['alt'], 'title' => $node->field_image[$node->language][0]['title'], 'attributes' => array(),'getsize' => false) );?></a></div><?php } ?>
+<strong class="post-title"><?php print $title ?></strong>
+<ul class="description-list">
+<li class="date"><?php print $date; ?></li>
+<?php if ($node->comment and !($node->comment == 1 and !$node->comment_count)) { ?><li class="comments"><a href="<?php print url("node/$node->nid", array('fragment' => 'comment-form')) ?>"><?php print format_plural($node->comment_count, '1 Comment', '@count Comments') ?></a></li><?php } ?>
+</ul>
+<?php hide($content['links']); hide($content['comments']); print render($content); ?>
+<div class="tlinks"><?php print render($content['links']) ?></div>
+</div>
+<br />
+<?php
+//$output = relatedcontent($node->nid, false, 'newspro_node_view', array(true));
+//   if (is_array($output)) foreach ($output as $group => $contents) {
+//     print '<div class="content-holder"><h2 class="heading">'.t('Related Posts').'</h2><ul class="post-list">'.implode('', $contents).'</ul></div>';
+//   }
+  $name = 'related_posts';
+  $display_id = 'block_1';
+  // Load the view
+  if ($view = views_get_view($name)) {
+    if ($view->access($display_id)) {
+      $output = $view->execute_display($display_id);
+      $view->destroy();
+	  print '<div class="content-holder"><h2 class="heading">'.t('Related Posts').'</h2>'.$output['content'].'</div>';
+    }
+    $view->destroy();
+  }
+?>
+<?php if ($node->uid) {
+	$account = user_load($node->uid);
+?>
+<div class="content-holder">
+<h2 class="heading"><?php print t('About author') ?></h2>
+<div class="author-box">
+<div class="image-box">
+<?php print theme('user_picture', array('account' => $account)); ?>
+</div>
+<div class="text-block">
+<p><?php print $account->signature; ?></p>
+</div>
+</div>
+</div>
+<?php } ?>
+<?php print render($content['comments']) ?>
+<?php } ?>
+
+<?php //print '<pre>'. check_plain(print_r($node, 1)) .'</pre>'; ?>

@@ -1,0 +1,26 @@
+diff --git a/newspro/css/all.css b/newspro/css/all.css
+index 26456a0..60bdc47 100644
+--- a/newspro/css/all.css
++++ b/newspro/css/all.css
+@@ -341,18 +341,18 @@ form,fieldset{
+ #header .logo-area{
+ 	width:100%;
+ 	overflow:hidden;
+-	padding:2px 0 4px 0px; /*-dkw11nov2011 remove whitespace in header*/
+-	margin-left: -2px;
++	padding:2px 0 4px; /*-dkw11nov2011 remove whitespace in header*/
+ 	/* BWL: this should be changed to the following as right now, the logo overlaps the top of the div
+ 	padding:10px 0 4px;
+ 	*/
+ }
+ .logo{
++	text-indent:-9999px;
+ 	overflow:hidden;
+ 	float:left;
+ 	width:960px;
+ 	height:224px;
+-	background:url(../images/theprecarious-banner-960-c.jpg) no-repeat;
++	background:url(../images/logo.gif) no-repeat;
+ 	margin:0 0 0 2px;
+ 	display:inline;
+ }

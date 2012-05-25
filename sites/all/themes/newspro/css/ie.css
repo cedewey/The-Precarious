@@ -1,0 +1,32 @@
+* html .gallery-holder .switcher li a {
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-switcher.png', sizingmethod='crop');
+}
+* html .gallery-holder .switcher li a:hover,
+* html .gallery-holder .switcher li.active a {
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-switcher-hover.png', sizingmethod='crop');
+}
+* html .green .gallery-holder .switcher li a:hover,
+* html .green .gallery-holder .switcher li.active a{
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-switcher-green.png', sizingmethod='crop');
+}
+* html .red .gallery-holder .switcher li a:hover,
+* html .red .gallery-holder .switcher li.active a{
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-switcher-red.png', sizingmethod='crop');
+}
+* html #nav ul li {background-image:expression( (this===this.parentNode.childNodes[0]) ? "none" : "auto");}
+* html .picture-block .text-box .wrapp {
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-text-box.png', sizingmethod='crop');
+}
+* html .pictures-section .pictures-list li .cover {
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-pictures-list.png', sizingmethod='scale');
+}
+* html .video-box .play {
+	background:url(../images/transparent.gif) no-repeat;
+	filter: progid:dximagetransform.microsoft.alphaimageloader(src='images/bg-play.png', sizingmethod='crop');
+}

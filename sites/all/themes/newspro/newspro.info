@@ -1,0 +1,34 @@
+
+name = News Pro
+description = Premium Drupal theme by <a href="http://www.themesnap.com">ThemeSnap.com</a>.
+screenshot = screenshot.png
+version = "7.0-rc2"
+core = 7.x
+
+settings[skin] = 0
+settings[slide_shows] = 0
+
+regions[top_banner] = Top Banner
+regions[sidebar_right_first] = Sidebar Right First
+regions[sidebar_right_tab] = Sidebar Right Tab
+regions[sidebar_right_bottom] = Sidebar Right Bottom
+regions[content] = Content
+regions[slide_show] = Slide Show
+regions[home_top] = Home top
+regions[home_posts_first] = Home posts first
+regions[home_posts_second] = Home posts second
+regions[picture_posts] = Picture Posts
+regions[home_category_first] = Home category first
+regions[home_category_second] = Home category second
+regions[home_category_third] = Home category third
+regions[home_category_fourth] = Home category fourth
+regions[footer_about] = Footer About
+regions[footer_twitter] = Footer Tweets
+regions[footer_categories] = Footer Categories
+regions[footer_message] = Footer message
+
+stylesheets[all][] = css/all.css
+
+scripts[] = js/jquery-1.4.2.min.js
+scripts[] = js/jquery.main.js
+scripts[] = js/tabs.js

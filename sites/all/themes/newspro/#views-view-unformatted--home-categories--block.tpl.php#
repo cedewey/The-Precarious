@@ -1,0 +1,8 @@
+<ul class="post-list">
+<?php 
+foreach ($rows as $id => $row) {
+print $row;
+HOMECAT_UNFOM
+}
+?>
+</ul>
