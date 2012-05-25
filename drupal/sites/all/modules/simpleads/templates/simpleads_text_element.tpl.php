@@ -11,4 +11,6 @@
  * 
  */
 ?>
-<div class="simplead-container text-ad"><?php print $text_ad; ?></div>
+<div class="simplead-container text-ad <?php if (isset($css_attributes)): print $css_attributes; endif; ?>">
+  <?php print $text_ad; ?>
+</div>

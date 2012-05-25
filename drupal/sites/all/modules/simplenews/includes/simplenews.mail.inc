@@ -205,6 +205,9 @@ function simplenews_send_source(SimplenewsSourceInterface $source) {
  * @param $conditions
  *   (Optional) Array of spool conditions which are applied to the query.
  *
+ * @return
+ *   Returns the amount of sent mails.
+ *
  * @ingroup spool
  */
 function simplenews_mail_spool($limit = SIMPLENEWS_UNLIMITED, array $conditions = array()) {
@@ -243,7 +246,7 @@ function simplenews_mail_spool($limit = SIMPLENEWS_UNLIMITED, array $conditions 
       // Check every n emails if we exceed the limit.
       // When PHP maximum execution time is almost elapsed we interrupt
       // sending. The remainder will be sent during the next cron run.
-      if (++$check_counter >= SIMPLENEWS_SEND_CHECK_INTERVAL) {
+      if (++$check_counter >= SIMPLENEWS_SEND_CHECK_INTERVAL && ini_get('max_execution_time') > 0) {
         $check_counter = 0;
         // Break the sending if a percentage of max execution time was exceeded.
         $elapsed = _simplenews_measure_usec();
@@ -280,6 +283,7 @@ function simplenews_mail_spool($limit = SIMPLENEWS_UNLIMITED, array $conditions 
     variable_set('simplenews_last_sent', $count_success);
 
     simplenews_revert_user();
+    return $count_success;
   }
 }
 
@@ -361,9 +365,14 @@ function simplenews_get_spool($limit = SIMPLENEWS_UNLIMITED, $conditions = array
   $status_or = db_or();
   $statuses = is_array($conditions['status']) ? $conditions['status'] : array($conditions['status']);
   foreach ($statuses as $status) {
-    $status_or->condition('status', $status);
     if ($status == SIMPLENEWS_SPOOL_IN_PROGRESS) {
-      $status_or->condition('s.timestamp', simplenews_get_expiration_time(), '<');
+      $status_or->condition(db_and()
+        ->condition('status', $status)
+        ->condition('s.timestamp', simplenews_get_expiration_time(), '<')
+      );
+    }
+    else {
+      $status_or->condition('status', $status);
     }
   }
   unset($conditions['status']);
@@ -468,13 +477,13 @@ function simplenews_count_spool(array $conditions = array()) {
 
   $query->addExpression('COUNT(*)', 'count');
 
-  return $query
+  return (int)$query
     ->execute()
     ->fetchField();
 }
 
 /**
- * Remove records from mail spool table.
+ * Remove old records from mail spool table.
  *
  * All records with status 'send' and time stamp before the expiration date
  * are removed from the spool.
@@ -493,16 +502,19 @@ function simplenews_clear_spool() {
 }
 
 /**
- * Remove records from mail spool table for node.
+ * Remove records from mail spool table according to the conditions.
  *
  * @return Count deleted
  *
  * @ingroup spool
  */
-function simplenews_clear_spool_node($node) {
-  return db_delete('simplenews_mail_spool')
-    ->condition('nid', $node->nid)
-    ->execute();
+function simplenews_delete_spool(array $conditions) {
+  $query = db_delete('simplenews_mail_spool');
+
+  foreach ($conditions as $condition => $value) {
+    $query->condition($condition, $value);
+  }
+  return $query->execute();
 }
 
 
@@ -763,6 +775,47 @@ function simplenews_build_subscribe_mail(&$message, $params) {
     $body = simplenews_subscription_confirmation_text('subscribe_unsubscribed', $langcode);
   }
     $message['body'][] = token_replace($body, $context, array('sanitize' => FALSE));
+}
+
+/**
+ * Build subject and body of the subscribe confirmation email.
+ *
+ * @param array $message
+ *   Message array as used by hook_mail().
+ * @param array $params
+ *   Parameter array as used by hook_mail().
+ */
+function simplenews_build_combined_mail(&$message, $params) {
+  $context = $params['context'];
+  $changes = $context['changes'];
+  $langcode = $message['language'];
+
+  // Use formatted from address "name" <mail_address>
+  $message['headers']['From'] = $params['from']['formatted'];
+
+  $message['subject'] = simplenews_subscription_confirmation_text('combined_subject', $langcode);
+  $message['subject'] = token_replace($message['subject'], $context, array('sanitize' => FALSE));
+
+  $changes_list = '';
+  $actual_changes = 0;
+  foreach (simplenews_confirmation_get_changes_list($context['simplenews_subscriber'], $changes, $langcode) as $tid => $change) {
+    $changes_list .= ' - ' . $change . "\n";
+
+    // Count the actual changes.
+    $subscribed = simplenews_user_is_subscribed($context['simplenews_subscriber']->mail, $tid);
+    if ($changes[$tid] == 'subscribe' && !$subscribed || $changes[$tid] == 'unsubscribe' && $subscribed) {
+      $actual_changes++;
+    }
+  }
+
+  // If there are actual changes, use the combined_body key otherwise use the
+  // one without a confirmation link.
+  $body_key = $actual_changes ? 'combined_body' : 'combined_body_unchanged';
+
+  $body = simplenews_subscription_confirmation_text($body_key, $langcode);
+  // The changes list is not an actual token.
+  $body = str_replace('[changes-list]', $changes_list, $body);
+  $message['body'][] = token_replace($body, $context, array('sanitize' => FALSE));
 }
 
 /**

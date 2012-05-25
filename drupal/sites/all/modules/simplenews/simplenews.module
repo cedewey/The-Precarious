@@ -393,11 +393,12 @@ function simplenews_node_view($node, $view_mode) {
 function simplenews_get_term_values($node) {
   $category_field = simplenews_get_category_field($node->type);
   $taxonomy = $node->{$category_field['field_name']};
-  $term = current($taxonomy);
-  if (!empty($term)) {
-    return $term;
+  if (isset($taxonomy[$node->language])) {
+    return $taxonomy[$node->language];
   }
-  return FALSE;
+
+  $term = current($taxonomy);
+  return ($term)? $term : FALSE;
 }
 
 /**
@@ -516,7 +517,7 @@ function simplenews_node_delete($node) {
   simplenews_newsletter_delete($node);
   // Check if pending emails of this newsletter issue exist and delete these too.
   module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
-  $count = simplenews_clear_spool_node($node);
+  $count = simplenews_delete_spool(array('nid' => $node->nid));
   if ($count) {
     drupal_set_message(t('Newsletter %title was deleted but had @count pending emails. They can no longer be sent.', array(
       '%title' => $node->title,
@@ -888,13 +889,12 @@ function simplenews_form_user_register_form_alter(&$form, &$form_state) {
  */
 function simplenews_user_insert(&$edit, $account, $category) {
   // Use the email address to check if new account is already subscribed.
-  $subscription = simplenews_subscriber_load_by_mail($edit['mail']);
+  $subscriber = simplenews_subscriber_load_by_mail($edit['mail']);
   // If the user is subscribed, we update the subscriber with uid and language.
-  if ($subscription) {
+  if ($subscriber) {
     $subscriber->uid = $edit['uid'];
     $subscriber->language = $edit['language'];
     $subscriber->activated = 1;
-    $subscriber->snid = $subscription->snid;
     simplenews_subscriber_save($subscriber);
   }
 
@@ -1010,10 +1010,31 @@ function simplenews_user_categories() {
     'name' => 'simplenews',
     'title' => t('Newsletters'),
     'weight' => 10,
-    'access callback' => 'user_access',
-    'access arguments' => array('subscribe to newsletters'),
+    'access callback' => 'simplenews_subscription_edit_access',
   );
   return $output;
+}
+
+/**
+ * Access callback for user newsletter editing.
+ */
+function simplenews_subscription_edit_access($account) {
+  global $user;
+  // Disallow anonymous.
+  if (!$account || $account->uid==0) {
+    return FALSE;
+  }
+  // Allow edit own subscription.
+  if ($user->uid == $account->uid) {
+    if (user_access('subscribe to newsletters', $account)) {
+      return TRUE;
+    }
+  }
+  // Allow administrator to edit account's subscription.
+  if (user_access('administer users')) {
+    return TRUE;
+  }
+  return FALSE;
 }
 
 /**
@@ -1111,7 +1132,7 @@ function simplenews_block_configure($delta = '') {
       '#type' => 'textfield',
       '#title' => t('Block message'),
       '#size' => 60,
-      '#maxlength' => 128,
+      '#maxlength' => 255,
       // @todo: clean localization / i18n needed
       '#default_value' => variable_get('simplenews_block_m_multiple', t('Select the newsletter(s) to which you want to subscribe or unsubscribe.')),
     );
@@ -1121,7 +1142,7 @@ function simplenews_block_configure($delta = '') {
       '#type' => 'textfield',
       '#title' => t('Block message'),
       '#size' => 60,
-      '#maxlength' => 128,
+      '#maxlength' => 255,
       '#default_value' => variable_get('simplenews_block_m_' . $delta, t('Stay informed on our latest news!')),
     );
     $form['simplenews_block_' . $delta]['simplenews_block_f_' . $delta] = array(
@@ -1317,22 +1338,19 @@ function simplenews_subscribe_user($mail, $tid, $confirm = TRUE, $source = 'unkn
   }
 
   if ($confirm) {
-    $subscription = new stdClass();
-    $subscription->snid = $subscriber->snid;
-    $subscription->tid = $tid;
-    $subscription->status = SIMPLENEWS_SUBSCRIPTION_STATUS_UNCONFIRMED;
-    $subscription->timestamp = REQUEST_TIME;
-    $subscription->source = $source;
-    simplenews_subscription_save($subscription);
+    // Create an unconfirmed subscription object if it doesn't exist yet.
+    if (!isset($subscriber->tids[$tid])) {
+      $subscription = new stdClass();
+      $subscription->snid = $subscriber->snid;
+      $subscription->tid = $tid;
+      $subscription->status = SIMPLENEWS_SUBSCRIPTION_STATUS_UNCONFIRMED;
+      $subscription->timestamp = REQUEST_TIME;
+      $subscription->source = $source;
+      simplenews_subscription_save($subscription);
+      $subscriber->newsletter_subscription[$tid] = $subscription;
+    }
 
-    // Send confirmation email to user to complete subscription or to tell
-    // them that he or she is already subscribed.
-    // Confirmation mail is in the user preferred language which is by default the language_default().
-    module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
-    $params['from'] = _simplenews_set_from();
-    $params['context']['category'] = simplenews_category_load($tid);
-    $params['context']['simplenews_subscriber'] = $subscriber;
-    drupal_mail('simplenews', 'subscribe', $mail, $subscriber->language, $params, $params['from']['address']);
+    simplenews_confirmation_send('subscribe', $subscriber, simplenews_category_load($tid));
   }
   elseif (!isset($subscriber->tids[$tid])) {
     // Subscribe the user if not already subscribed.
@@ -1344,6 +1362,7 @@ function simplenews_subscribe_user($mail, $tid, $confirm = TRUE, $source = 'unkn
     $subscription->timestamp = REQUEST_TIME;
     $subscription->source = $source;
     simplenews_subscription_save($subscription);
+    $subscriber->newsletter_subscription[$tid] = $subscription;
     $subscriber->tids[$tid] = $tid;
 
     module_invoke_all('simplenews_subscribe_user', $subscriber, $subscription);
@@ -1383,28 +1402,21 @@ function simplenews_unsubscribe_user($mail, $tid, $confirm = TRUE, $source = 'un
   }
 
   if ($confirm) {
-    // Send confirmation email to user to complete unsubscriber
-    // or to tell them that he or she is not subscribed
-    // Confirmation mail is in the user preferred language.
-    module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
-    $params['from'] = _simplenews_set_from();
-    $params['context']['category'] = $category;
-    $params['context']['simplenews_subscriber'] = $subscriber;
-    drupal_mail('simplenews', 'unsubscribe', $mail, $subscriber->language, $params, $params['from']['address']);
+    simplenews_confirmation_send('unsubscribe', $subscriber, simplenews_category_load($tid));
   }
   elseif (isset($subscriber->tids[$tid])) {
     // Unsubscribe the user from the mailing list.
-    // @todo rewrite if subscription object is loaded in $subscriber->tids[$tid]
-    $subscription = new stdClass();
-    $subscription->snid = $subscriber->snid;
-    $subscription->tid = $tid;
-    $subscription->status = SIMPLENEWS_SUBSCRIPTION_STATUS_UNSUBSCRIBED;
-    $subscription->timestamp = REQUEST_TIME;
-    $subscription->source = $source;
-    simplenews_subscription_save($subscription);
-    $subscriber->tids[$tid] = $tid;
+    $subscriber->newsletter_subscription[$tid]->status = SIMPLENEWS_SUBSCRIPTION_STATUS_UNSUBSCRIBED;
+    $subscriber->newsletter_subscription[$tid]->timestamp = REQUEST_TIME;
+    $subscriber->newsletter_subscription[$tid]->source = $source;
+    simplenews_subscription_save($subscriber->newsletter_subscription[$tid]);
+    unset($subscriber->tids[$tid]);
 
-    module_invoke_all('simplenews_unsubscribe_user', $subscriber, $subscription);
+    // Clear eventually existing mail spool rows for this subscriber.
+    module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
+    simplenews_delete_spool(array('snid' => $subscriber->snid, 'tid' => $tid));
+
+    module_invoke_all('simplenews_unsubscribe_user', $subscriber, $subscriber->newsletter_subscription[$tid]);
   }
   return TRUE;
 }
@@ -1565,6 +1577,38 @@ function simplenews_subscriber_load_by_uid($uid) {
 }
 
 /**
+ * Load a simplenews subscriber using the hash.
+ *
+ * @param $hash
+ *   A hash generated by simplenews_generate_hash().
+ *
+ * @return
+ *   Simplenews subscriber object, FALSE if the hash is invalid or the
+ *   corresponding subscriber does not exist.
+ */
+function simplenews_subscriber_load_by_hash($hash) {
+  // Attempt to detect invalid format.
+  if (!preg_match('/.{10}[0-9]+t[0-9]+/', $hash)) {
+    return FALSE;
+  }
+
+  $md5 = drupal_substr($hash, 0, 10);
+
+  list($snid, $tid) = explode('t', drupal_substr($hash, 10));
+
+  $subscriber = simplenews_subscriber_load($snid);
+  if (!$subscriber) {
+    return FALSE;
+  }
+
+  // Check the hash if the comparison fails, return a not found error.
+  if ($md5 != drupal_substr(md5($subscriber->mail . simplenews_private_key()), 0, 10)) {
+    return FALSE;
+  }
+  return $subscriber;
+}
+
+/**
  * Loads simplenews subscriber objects.
  *
  * @param $snids
@@ -1599,8 +1643,9 @@ function simplenews_subscriber_load_multiple($snids = array(), $conditions = arr
 
     $subscribers = $query->execute()->fetchAllAssoc('snid');
     if (!empty($subscribers)) {
-      // Initialize default values.
+      // Initialize default values and unserialize.
       foreach ($subscribers as $subscriber) {
+        $subscriber->changes = unserialize($subscriber->changes);
         $subscriber->tids = array();
       }
 
@@ -1634,6 +1679,7 @@ function simplenews_subscriber_save(&$subscriber) {
         'mail' => $subscriber->mail,
         'uid' => $subscriber->uid,
         'language' => $subscriber->language,
+        'changes' => serialize(isset($subscriber->changes) ? $subscriber->changes : array()),
       ))
       ->execute();
     module_invoke_all('simplenews_subscriber_update', $subscriber);
@@ -1645,6 +1691,7 @@ function simplenews_subscriber_save(&$subscriber) {
         'mail' => $subscriber->mail,
         'uid' => $subscriber->uid,
         'language' => $subscriber->language,
+        'changes' => serialize(isset($subscriber->changes) ? $subscriber->changes : array()),
       ));
     $last_insert_id = $query->execute();
     if ($last_insert_id !== FALSE) {
@@ -1727,6 +1774,10 @@ function simplenews_mail($key, &$message, $params) {
       break;
     case 'subscribe':
       simplenews_build_subscribe_mail($message, $params);
+      break;
+      break;
+    case 'subscribe_combined':
+      simplenews_build_combined_mail($message, $params);
       break;
     case 'unsubscribe':
       simplenews_build_unsubscribe_mail($message, $params);
@@ -2005,6 +2056,14 @@ function simplenews_token_info() {
     'name' => t('Unsubscribe URL'),
     'description' => t('The URL of the page where the cancellation of the subscription is confirmed.'),
   );
+  $subscriber['manage-url'] = array(
+    'name' => t('Manage URL'),
+    'description' => t('The URL of the page where the subscribers can manage their newsletter subscriptions.'),
+  );
+  $subscriber['combined-url'] = array(
+    'name' => t('Combined confirmation URL'),
+    'description' => t('The URL of the page where subscribers can confirm their subscription changes.'),
+  );
   $subscriber['mail'] = array(
     'name' => t('Subscriber email'),
     'description' => t('The email address of the newsletter receiver.'),
@@ -2061,13 +2120,16 @@ function simplenews_tokens($type, $tokens, $data = array(), $options = array()) 
         return;
       }
       $subscriber = $data['simplenews_subscriber'];
-      $category = $data['category'];
+      $category = isset($data['category']) ? $data['category'] : NULL;
       $language = isset($subscriber->language->language) ? $subscriber->language : user_preferred_language($subscriber);
 
       // Build hash for the URL of the (un)subscribe confirmation page.
       $hash = '';
       if (isset($subscriber->snid) && isset($category->tid)) {
         $hash = simplenews_generate_hash($subscriber->mail, $subscriber->snid, $category->tid);
+      }
+      else if (isset($subscriber->snid)) {
+        $combined_hash = simplenews_generate_hash($subscriber->mail, $subscriber->snid, 0);
       }
 
       foreach ($tokens as $name => $original) {
@@ -2079,6 +2141,14 @@ function simplenews_tokens($type, $tokens, $data = array(), $options = array()) 
 
           case 'unsubscribe-url':
             $replacements[$original] = url('newsletter/confirm/remove/' . $hash, array('absolute' => TRUE, 'language' => $language));
+            break;
+
+          case 'combined-url':
+            $replacements[$original] = url('newsletter/confirm/combined/' . $combined_hash, array('absolute' => TRUE, 'language' => $language));
+            break;
+
+          case 'manage-url':
+            $replacements[$original] = url('newsletter/subscriptions/' . $hash, array('absolute' => TRUE, 'language' => $language));
             break;
 
           case 'mail':
@@ -2157,13 +2227,13 @@ function simplenews_help($path, $arg) {
         $help .= '<li>' . l(t('Configure permissions'), 'admin/people/permissions', array('fragment' => 'module-simplenews')) . "</li>\n";
       }
       if (user_access('administer simplenews settings')) {
-        $help .= '<li>' . l(t('Configure Simplenews'), 'admin/config/simplenews') . "</li>\n";
+        $help .= '<li>' . l(t('Configure Simplenews'), 'admin/config/services/simplenews/settings') . "</li>\n";
       }
       if (user_access('administer blocks')) {
         $help .= '<li>' . t('Enable a newsletter <a href="@admin_blocks">subscription block</a>.', array('@admin_blocks' => url('admin/structure/block'))) . "</li>\n";
       }
       if (user_access('administer simplenews settings')) {
-        $help .= '<li>' . t('Manage your <a href="@newsletters">newsletters</a>, <a href="@sent">sent newsletters</a> and <a href="@subscriptions">subscriptions</a>.', array('@newsletters' => url('admin/config/services/simplenews'), '@sent' => url('admin/content/simplenews'), '@subscriptions' => url('admin/content/simplenews/users'))) . "</li>\n";
+        $help .= '<li>' . t('Manage your <a href="@newsletters">newsletters</a>, <a href="@sent">sent newsletters</a> and <a href="@subscriptions">subscriptions</a>.', array('@newsletters' => url('admin/config/services/simplenews'), '@sent' => url('admin/content/simplenews'), '@subscriptions' => url('admin/people/simplenews'))) . "</li>\n";
       }
       $help .= '</ul>';
 
@@ -2173,10 +2243,10 @@ function simplenews_help($path, $arg) {
       $help  = '<ul>';
       $help .= '<li>' . t('Add this newsletter issue to a newsletter by selecting a newsletter from the select list. To send this newsletter issue, first save the node, then use the "Newsletter" tab.') . "</li>\n";
       if (user_access('administer simplenews settings')) {
-        $help .= '<li>' . t('Set default send options at <a href="@configuration">Administer > Site configuration > Simplenews > Newsletter</a>.', array('@configuration' => url('admin/config/simplenews/newsletter'))) . "</li>\n";
+        $help .= '<li>' . t('Set default send options at <a href="@configuration">Administration > Configuration > Web services > Newsletters</a>.', array('@configuration' => url('admin/config/services/simplenews'))) . "</li>\n";
       }
       if (user_access('administer newsletters')) {
-        $help .= '<li>' . t('Set newsletter specific options at <a href="@configuration">Administer > Content management > Newsletters > Newsletters</a>.', array('@configuration' => url('admin/content/simplenews'))) . "</li>\n";
+        $help .= '<li>' . t('Set newsletter specific options at <a href="@configuration">Administration > Content > Newsletters</a>.', array('@configuration' => url('admin/content/simplenews'))) . "</li>\n";
       }
       $help .= '</ul>';
       return $help;
@@ -2282,6 +2352,34 @@ function simplenews_variable_info($options) {
     'title' => t('Simplenews unsubscription confirmation body (not subscribed)'),
     'localize' => TRUE,
   );
+  $variable['simplenews_confirm_combined_subject'] = array(
+    'title' => t('Simplenews combined confirmation subject'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_body'] = array(
+    'title' => t('Simplenews combined confirmation body'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_body_unchanged'] = array(
+    'title' => t('Simplenews combined confirmation body when there are no changes.'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_line_subscribe_unsubscribed'] = array(
+    'title' => t('Simplenews combined confirmation subscribe line'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_line_subscribe_subscribed'] = array(
+    'title' => t('Simplenews combined confirmation already subscribed line'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_line_unsubscribe_subscribed'] = array(
+    'title' => t('Simplenews combined confirmation unsubscribe line'),
+    'localize' => TRUE,
+  );
+  $variable['simplenews_confirm_combined_line_unsubscribe_unsubscribed'] = array(
+    'title' => t('Simplenews combined confirmation not subscribed line'),
+    'localize' => TRUE,
+  );
   return $variable;
 }
 
@@ -2315,6 +2413,27 @@ function simplenews_subscription_confirmation_text($key) {
         break;
       case 'subscribe_subject':
         $text = t("Confirmation for [simplenews-category:name] from [site:name]");
+        break;
+      case 'combined_subject':
+        $text = t('Confirmation for [site:name]');
+        break;
+      case 'combined_body':
+        $text = t("We have received a request for the following subscription changes for [simplenews-subscriber:mail] at [site:url]:\n\n[changes-list]\n\nTo confirm please use the link below.\n\n[simplenews-subscriber:combined-url]");
+        break;
+      case 'combined_body_unchanged':
+        $text = t("We have received a request for the following subscription changes for [simplenews-subscriber:mail] at [site:url]:\n\n[changes-list]\n\nNo confirmation necessary because all requested changes equal the current state.");
+        break;
+      case 'combined_line_subscribe_unsubscribed';
+        $text = t('Subscribe to [simplenews-category:name]');
+        break;
+      case 'combined_line_subscribe_subscribed';
+        $text = t('Already subscribed to [simplenews-category:name]');
+        break;
+      case 'combined_line_unsubscribe_subscribed';
+        $text = t('Unsubscribe from [simplenews-category:name]');
+        break;
+      case 'combined_line_unsubscribe_unsubscribed';
+        $text = t('Already unsubscribed from [simplenews-category:name]');
         break;
     }
   }
@@ -2369,6 +2488,7 @@ function simplenews_theme() {
         'language' => NULL,
       ),
       'path' => $path . '/theme',
+      'mail theme' => TRUE,
       'template' => 'simplenews-newsletter-body',
       'pattern' => 'simplenews-newsletter-body__',
     ),
@@ -2381,6 +2501,7 @@ function simplenews_theme() {
         'language' => NULL,
       ),
       'path' => $path . '/theme',
+      'mail theme' => TRUE,
       'template' => 'simplenews-newsletter-footer',
       'pattern' => 'simplenews-newsletter-footer__',
     ),
@@ -2550,6 +2671,9 @@ function template_preprocess_simplenews_newsletter_body(&$variables) {
   unset($variables['build']['links']);
   unset($variables['build']['comments']);
 
+  $theme = function_exists('mailsystem_get_mail_theme') ? mailsystem_get_mail_theme() : path_to_theme();
+  $variables['simplenews_theme'] = drupal_get_path('theme', $theme);
+
   $variables['title'] = check_plain($variables['build']['#node']->title);
   $variables['language'] = $variables['build']["#language"];
   $variables['view_mode'] = $variables['build']['#view_mode'];
@@ -2573,6 +2697,9 @@ function template_preprocess_simplenews_newsletter_footer(&$variables) {
   // We don't want to include links and comments in the email.
   unset($variables['build']['links']);
   unset($variables['build']['comments']);
+
+  $theme = function_exists('mailsystem_get_mail_theme') ? mailsystem_get_mail_theme() : path_to_theme();
+  $variables['simplenews_theme'] = drupal_get_path('theme', $theme);
 
   $variables['unsubscribe_text'] = t('Unsubscribe from this newsletter', array(), array('langcode' => $variables['language']));
   $variables['test_message'] = t('This is a test version of the newsletter.', array(), array('langcode' => $variables['language']));
@@ -2808,4 +2935,177 @@ function simplenews_impersonate_user($new_user = NULL) {
  */
 function simplenews_revert_user() {
   return simplenews_impersonate_user();
+}
+
+/**
+ * Starts combining confirmation mails.
+ *
+ * If combining mails is enabled, it is mandatory to call
+ * simplenews_send_combined_confirmation() after all subscription changes have
+ * been applied or no mails will be sent.
+ *
+ * @param $collect
+ *   TRUE to start combining mail conformations, FALSE to disable it.
+ *
+ * @return
+ *   TRUE if combining has been started, FALSE otherwise.
+ */
+function simplenews_confirmation_combine($collect = NULL) {
+  $static_collect = &drupal_static(__FUNCTION__, FALSE);
+  if (isset($collect)) {
+    $static_collect = $collect;
+  }
+  return $static_collect;
+}
+
+/**
+ * Add a mail confirmation or fetch them.
+ *
+ * @param $action
+ *   (Optional) The confirmation type, either subscribe or unsubscribe.
+ * @param $subscriber
+ *   (Optional) The subscriber object.
+ * @param $category
+ *   (Optional) The newsletter category object.
+ *
+ * @return
+ *   If no arguments are passed in, an array of current confirmations, keyed by
+ *   subscriber id, the value is an array with the keys action and tid.
+ */
+function simplenews_confirmation_add_combined($action = NULL, $subscriber = NULL, $category = NULL) {
+  $group = &drupal_static(__FUNCTION__, array());
+  if (!empty($action)) {
+    $group[$subscriber->snid][$category->tid] = $action;
+  }
+  else {
+    return $group;
+  }
+}
+
+/**
+ * Send collected confirmations.
+ *
+ * Depending on the settings, always sends a combined confirmation,
+ * only when there are multiple changes for a subscriber or never.
+ *
+ * Calling this functions also resets the combine flag so that later
+ * confirmations are sent separately. simplenews_combine_confirmations() needs
+ * to be called again to re-enable combining.
+ *
+ * @return
+ *   TRUE if any confirmation mails have been sent.
+ *
+ * @todo This function currently does not return information about which
+ *       subscriber received a confirmation.
+ */
+function simplenews_confirmation_send_combined() {
+  // Disable combining for further confirmations.
+  simplenews_confirmation_combine(FALSE);
+  $group = simplenews_confirmation_add_combined();
+  foreach ($group as $snid => $changes) {
+    module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
+    $params['from'] = _simplenews_set_from();
+    $subscriber = simplenews_subscriber_load($snid);
+    $params['context']['simplenews_subscriber'] = $subscriber;
+    // Send multiple if there is more than one change for this subscriber
+    // single otherwise.
+    $use_combined = variable_get('simplenews_use_combined', 'multiple');
+    if ((count($changes) > 1 && $use_combined != 'never') || $use_combined == 'always') {
+      $params['context']['changes'] = $changes;
+      $key = 'subscribe_combined';
+      drupal_mail('simplenews', $key, $subscriber->mail, $subscriber->language, $params, $params['from']['address']);
+    }
+    else {
+      foreach ($changes as $tid => $key) {
+        $params['context']['category'] = simplenews_category_load($tid);
+        drupal_mail('simplenews', $key, $subscriber->mail, $subscriber->language, $params, $params['from']['address']);
+      }
+    }
+
+    // Save the changes in the subscriber.
+    $subscriber->changes = $changes;
+    simplenews_subscriber_save($subscriber);
+  }
+  return !empty($group);
+}
+
+/**
+ * Send a confirmation mail.
+ *
+ * Either sends a mail immediatly or collects them for a combined mail.
+ *
+ * @param $action
+ *   The confirmation type, either subscribe or unsubscribe.
+ * @param $subscriber
+ *   The subscriber object.
+ * @param $category
+ *   The newsletter category object.
+ */
+function simplenews_confirmation_send($action, $subscriber, $category) {
+  // Check if confirmation should be sent immediatly or grouped.
+  if (simplenews_confirmation_combine()) {
+    simplenews_confirmation_add_combined($action, $subscriber, $category);
+  }
+  else {
+    // Send confirmation email to user to complete (un)subscription.
+    // Confirmation mail is in the user preferred language which is by default the
+    // language_default().
+    module_load_include('inc', 'simplenews', 'includes/simplenews.mail');
+    $params['from'] = _simplenews_set_from();
+    $params['context']['category'] = $category;
+    $params['context']['simplenews_subscriber'] = $subscriber;
+    drupal_mail('simplenews', $action, $subscriber->mail, $subscriber->language, $params, $params['from']['address']);
+  }
+}
+
+/**
+ * Converts an array of subscription changes into descriptions.
+ *
+ * @param $subscriber
+ *   Simplenews subscriber object.
+ * @param $changes
+ *   (Optional) Array of changes, each is an array with the keys action and tid.
+ *   Defaults to $subscriber->changes, which contains the currently saved
+ *   changes for the subscriber. No-op changes are removed from this array.
+ * @param $langcode
+ *   (Optional) Specify the language of the description strings, defaults to the
+ *   current language.
+ *
+ * @return
+ *   Array of description strings describing the changes.
+ */
+function simplenews_confirmation_get_changes_list($subscriber, &$changes = NULL, $langcode = NULL) {
+  if (empty($langcode)) {
+    global $language;
+    $langcode = $language->language;
+  }
+
+  if (empty($changes)) {
+    $changes = $subscriber->changes;
+  }
+
+  $changes_list= array();
+  foreach ($changes as $tid => $action) {
+    $subscribed = simplenews_user_is_subscribed($subscriber->mail, $tid);
+
+    // Get text for each possible combination.
+    if ($action == 'subscribe' && !$subscribed) {
+      $line = simplenews_subscription_confirmation_text('combined_line_subscribe_unsubscribed', $langcode);
+    }
+    else if ($action == 'subscribe' && $subscribed) {
+      $line = simplenews_subscription_confirmation_text('combined_line_subscribe_subscribed', $langcode);
+    }
+    else if ($action == 'unsubscribe' && !$subscribed) {
+      $line = simplenews_subscription_confirmation_text('combined_line_unsubscribe_unsubscribed', $langcode);
+    }
+    else if ($action == 'unsubscribe' && $subscribed) {
+      $line = simplenews_subscription_confirmation_text('combined_line_unsubscribe_subscribed', $langcode);
+    }
+    $category_context = array(
+      'simplenews_subscriber' => $subscriber,
+      'category' => simplenews_category_load($tid),
+    );
+    $changes_list[$tid] = token_replace($line, $category_context, array('sanitize' => FALSE));
+  }
+  return $changes_list;
 }

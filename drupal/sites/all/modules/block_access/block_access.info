@@ -1,0 +1,24 @@
+; $Id: block_access.info,v 1.1 2010/05/07 18:14:19 lambic Exp $
+name = Block Access
+description = Provides flexible block administration access control.
+package = Access control
+core = 7.x
+files[] = block_access.install
+files[] = block_access.module
+files[] = block_access.admin.inc
+files[] = block_access.db.inc
+files[] = block_access.theme.inc
+
+; Information added by drupal.org packaging script on 2011-12-03
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "block_access"
+datestamp = "1322871009"
+
+
+; Information added by drupal.org packaging script on 2012-03-27
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "block_access"
+datestamp = "1332806729"
+

@@ -7,7 +7,7 @@
 
 /**
  * Helper function.
- * Returns data array for an adertisement.
+ * Returns data array for an adertisement block.
  *
  * @param int $tid
  * @param int $limit
@@ -23,37 +23,28 @@ function _simpleads_load_ads($tid, $limit) {
   if (is_numeric($limit)) {
 
     $ad_settings = _simpleads_adgroup_settings($tid);
-    $queries = module_invoke_all('simpleads_order', $ad_settings['ads_order'], $term_ids, $limit);
+    $order_delta = isset($ad_settings['ads_order']) ? $ad_settings['ads_order'] : 'random';
+    $queries = module_invoke_all('simpleads_order', $order_delta, $term_ids, $limit);
+
     if (count($queries) > 0) {
       foreach ($queries as $i => $query) {
-        if ($queries[$i] != '') {
-          foreach ($queries[$i] as $row) {
-            $node = node_load($row->nid);
-            if ($node->simpleads_show == 1) {
-              $result[] = _simpleads_ads_data($node);
+        foreach ($queries[$i] as $row) {
+          $node = node_load($row->nid);
+          $active = TRUE;
+          if (isset($node->field_ad_status[$node->language])) {
+            if ($node->field_ad_status[$node->language][0]['value'] != 1) {
+              $active = FALSE;
             }
+          }
+          if ($active) {
+            $result[] = _simpleads_ads_data($node);
           }
         }
       }
     }
-    else {
-      $query = db_select('node', 'n');
-      $query->join('taxonomy_index', 'ti', 'n.nid = ti.nid');
-      $query->fields('n', array('nid'));
-      $query->condition('n.type', 'simpleads');
-      $query->condition('ti.tid', $term_ids, 'IN');
-      $query->orderRandom();
-      $query->range(0, $limit);
-      $results = $query->execute();
 
-      foreach ($results as $row) {
-        $node = node_load($row->nid);
-        if ($node->simpleads_show == 1) {
-          $result[] = _simpleads_ads_data($node);
-        }
-      }
-    }
   }
+
   return $result;
 }
 
@@ -63,7 +54,8 @@ function _simpleads_load_ads($tid, $limit) {
  * @param object $node
  */
 function _simpleads_ads_data($node) {
-  if ($node) {
+  $data = &drupal_static(__FUNCTION__);
+  if (is_object($node)) {
     $type = 'graphic';
     if (isset($node->field_ad_type[$node->language]) && !empty($node->field_ad_type[$node->language][0]['value'])) {
       $type = $node->field_ad_type[$node->language][0]['value'];
@@ -100,7 +92,7 @@ function _simpleads_ads_data($node) {
       $target = FALSE;
     }
 
-    return array(
+    $data = array(
       'type' => $type,
       'url' => url('simpleads/redirect/' . $node->nid, array('absolute' => TRUE)),
       'destination_url' => $destination_url,
@@ -109,10 +101,13 @@ function _simpleads_ads_data($node) {
       'image_uri' => $image_uri,
       'alt' => $alt,
       'nid' => $node->nid,
+      'node' => $node,
       'text' => $text_ad,
       'text_format' => $text_format,
       'flash' => $flash,
     );
+    drupal_alter('simpleads', $data);
+    return $data;
   }
 }
 
@@ -138,14 +133,22 @@ function _simpleads_render_ajax_template($nodes, $tid, $limit, $settings1 = arra
     if (count($settings1) > 0) $ad_setting = array_merge($this_ad_setting, $settings1);
     else $ad_setting = $this_ad_setting;
 
+    $css_class = array();
+    if ($count == 0) $css_class = array('first');
+    else {
+      if ($count == (count($nodes) - 1)) {
+        $css_class = array('last');
+      }
+    }
+
     if ($ad['type'] == 'graphic') {
-      $result .= theme('simpleads_img_element', array('ad' => $ad, 'settings' => $ad_setting));
+      $result .= theme('simpleads_img_element', array('ad' => $ad, 'settings' => $ad_setting, 'css_class' => $css_class));
     }
     elseif ($ad['type'] == 'text') {
-      $result .= theme('simpleads_text_element', array('ad' => $ad, 'settings' => $ad_setting));
+      $result .= theme('simpleads_text_element', array('ad' => $ad, 'settings' => $ad_setting, 'css_class' => $css_class));
     }
     else {
-      $result .= theme('simpleads_flash_element', array('ad' => $ad, 'settings' => $ad_setting));
+      $result .= theme('simpleads_flash_element', array('ad' => $ad, 'settings' => $ad_setting, 'css_class' => $css_class));
     }
     $count++;
   }
@@ -170,8 +173,13 @@ function simpleadsid_to_arg($arg) {
  * Node Ad stats tab.
  */
 function _simpleads_node_stat_tab() {
-  $node = node_load(arg(1));
-  if ($node->type == 'simpleads' && user_access('access ad statistics')) return TRUE; else return FALSE;
+  if (arg(0) == 'node' && is_numeric(arg(1))) {
+    $node = node_load(arg(1));
+    if (is_object($node) && $node->type == 'simpleads' && user_access('access ad statistics')) return TRUE; else return FALSE;
+  }
+  else {
+    return FALSE;
+  }
 }
 
 /**
@@ -180,14 +188,8 @@ function _simpleads_node_stat_tab() {
  *
  * @param int $nid
  */
-function _simpleads_save_click($nid) {
-  db_insert('simpleads_clicks')
-  ->fields(array(
-    'nid' => $nid,
-    'timestamp' => time(),
-    'ip_address' => ip_address(),
-  ))
-  ->execute();
+function _simpleads_save_click($node) {
+  module_invoke_all('simpleads_ad_click', 'insert', $node);
 }
 
 /**
@@ -196,8 +198,8 @@ function _simpleads_save_click($nid) {
  *
  * @param int $nid
  */
-function _simpleads_delete_click($nid) {
-  db_delete('simpleads_clicks')->condition('nid', $nid)->execute();
+function _simpleads_delete_click($node) {
+  module_invoke_all('simpleads_ad_click', 'delete', $node);
 }
 
 /**
@@ -206,14 +208,8 @@ function _simpleads_delete_click($nid) {
  *
  * @param int $nid
  */
-function _simpleads_save_impression($nid) {
-  db_insert('simpleads_impressions')
-  ->fields(array(
-    'nid' => $nid,
-    'timestamp' => time(),
-    'ip_address' => ip_address(),
-  ))
-  ->execute();
+function _simpleads_save_impression($node) {
+  module_invoke_all('simpleads_ad_impression', 'insert', $node);
 }
 
 /**
@@ -222,8 +218,8 @@ function _simpleads_save_impression($nid) {
  *
  * @param int $nid
  */
-function _simpleads_delete_impression($nid) {
-  db_delete('simpleads_impressions')->condition('nid', $nid)->execute();
+function _simpleads_delete_impression($node) {
+  module_invoke_all('simpleads_ad_impression', 'delete', $node);
 }
 
 /**
@@ -233,12 +229,22 @@ function _simpleads_delete_impression($nid) {
  * @global object $user
  * @param object $node
  */
-function _simpleads_increase_impression($nid) {
+function _simpleads_increase_impression($node) {
   global $user;
-  if (user_access('count ad impressions')) {
-    if ($user->uid != 1) {
-      _simpleads_save_impression($nid);
-    }
+  _simpleads_save_impression($node);
+}
+
+/**
+ * Helper function.
+ * Return TRUE if the visitor is a bot.
+ * @return boolean
+ */
+function _simpleads_bot_detect() {
+  if (preg_match('/bot|crawl|slurp|spider/i', $_SERVER['HTTP_USER_AGENT'])) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
   }
 }
 
@@ -264,7 +270,7 @@ function _simpleads_activate_deactive_ad($node, $who = 'cron') {
   $start_time = (int)strtotime($start_time);
   $end_time = (int)strtotime($end_time);
 
-  $now = time();
+  $now = REQUEST_TIME;
 
   if ($start_time != '' && $end_time != '') {
     if ($now >= $start_time && $end_time > $now) {
@@ -304,6 +310,9 @@ function _simpleads_activate_deactive_ad($node, $who = 'cron') {
   }
   if ($who != 'cron') {
     return $node;
+  }
+  else {
+    module_invoke_all('simpleads_status_change', $node, $node->status);
   }
 }
 
@@ -350,9 +359,9 @@ function _simpleads_stats_info($node, $op = 'list') {
   if ($hook = module_invoke_all('simpleads_stats_info', $node, $op)) {
     if (is_array($hook) && !empty($hook)) {
       foreach ($hook as $data) {
-          $result[] = '<div class="stat-item">' . $data . '</div>';
+        $result[] = '<div class="stat-item">' . $data . '</div>';
       }
-      return '<div class="simpleads-stat-' . $op . '">' . join("<br />", $result) . '</div>';
+      return '<div class="simpleads-stat-' . $op . '">' . join("", $result) . '</div>';
     }
   }
 }
@@ -379,6 +388,7 @@ function _simpleads_ads_listing_query($filter = array()) {
     $query = db_select('node', 'n')->extend('PagerDefault')->limit($filter['adsperpage']);
     $query->leftJoin('taxonomy_index', 'ti', 'ti.nid = n.nid');
     $query->fields('n', array('nid'));
+    $query->addTag('node_access');
     $query->condition('n.type', 'simpleads');
     if (isset($filter['adgroup'])) {
       $query->condition('ti.tid', $filter['adgroup']);
@@ -395,11 +405,37 @@ function _simpleads_ads_listing_query($filter = array()) {
 
 /**
  * Helper function.
+ * Validates redirection URL.
+ */
+function _simpleads_validate_url($url) {
+  if (!preg_match("~^(?:f|ht)tps?://~i", $url)) {
+    // Allow internal url if user has access to it.
+    if (drupal_valid_path($url)) {
+      $url = url($url, array('absolute' => TRUE));
+    }
+    else {
+      $url = 'http://' . $url;
+    }
+  }
+  else {
+    $url = url($url, array('absolute' => TRUE));
+  }
+  return $url;
+}
+
+/**
+ * Helper function.
  */
 function _simpleads_theme_attributes_init($vars) {
   $vars['attributes_array'] = array();
   $vars['title_attributes_array'] = array();
   $vars['content_attributes_array'] = array();
   $vars['classes_array'] = array('');
+  if (isset($vars['css_class']) && count($vars['css_class']) > 0) {
+    $vars['css_attributes'] = join(" ", $vars['css_class']);
+  }
+  else {
+    $vars['css_attributes'] = '';
+  }
   return $vars;
 }

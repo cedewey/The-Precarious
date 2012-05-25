@@ -110,7 +110,7 @@ function _simpelads_load(elem, tid, num, img_loader) {
     if (tid > 0 && num > 0) {
       if (img_loader != '')
         $(elem).html(img_loader);
-      $.get(basepath + 'simpleads/load/' + tid + '/' + num, function (data) {
+      $.get(basepath + '?q=simpleads/load/' + tid + '/' + num, function (data) {
         $(elem).html(data);
       });
     }
