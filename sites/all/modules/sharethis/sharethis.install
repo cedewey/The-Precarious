@@ -15,16 +15,16 @@ function sharethis_install() {
  * Creates a publisher key for use with the ShareThis API.
  */
 function sharethis_create_publisher_key() {
-	$pubkey = "dr-";
-	$pubkey .= dechex(mt_rand( 0, 0xffff ));
-	$pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
-	$pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
-	$pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
-	$pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
-	$pubkey .= dechex(mt_rand( 0, 0xffff ));
-	$pubkey .= dechex(mt_rand( 0, 0xffff ));
-	$pubkey .= dechex(mt_rand( 0, 0xffff ));
-	return $pubkey;
+  $pubkey = "dr-";
+  $pubkey .= dechex(mt_rand( 0, 0xffff ));
+  $pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
+  $pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
+  $pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
+  $pubkey .= dechex(mt_rand( 0, 0xffff )) . "-";
+  $pubkey .= dechex(mt_rand( 0, 0xffff ));
+  $pubkey .= dechex(mt_rand( 0, 0xffff ));
+  $pubkey .= dechex(mt_rand( 0, 0xffff ));
+  return $pubkey;
 }
 
 /**
